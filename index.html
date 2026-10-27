@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>AR Kubus: Urai Jadi Jaring-jaring</title>
+<script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+<style>
+  :root { --ink:#16243a; --paper:#fff8ec; --amber:#ffb703; --line:rgba(255,255,255,.18); }
+  html, body { margin:0; height:100%; overflow:hidden; font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif; }
+  #hint { position:fixed; top:0; left:0; right:0; z-index:20; padding:14px 16px; padding-top:max(14px, env(safe-area-inset-top));
+          background:rgba(22,36,58,.88); color:var(--paper); font-size:15px; line-height:1.4; text-align:center; transition:opacity .25s; }
+  #hint a { color:var(--amber); }
+  #hint.hidden { opacity:0; pointer-events:none; }
+  #panel { position:fixed; left:0; right:0; bottom:0; z-index:20; padding:14px 16px; padding-bottom:max(14px, env(safe-area-inset-bottom));
+           background:rgba(22,36,58,.92); color:var(--paper); border-top:1px solid var(--line); }
+  #info { font-size:15px; line-height:1.45; min-height:44px; margin-bottom:10px; }
+  #info b { color:var(--amber); }
+  .row { display:flex; gap:10px; align-items:center; }
+  button { flex:0 0 auto; min-width:92px; padding:12px 14px; border:0; border-radius:12px; background:var(--amber); color:var(--ink);
+           font:inherit; font-weight:700; font-size:15px; }
+  button.alt { background:transparent; color:var(--paper); box-shadow:inset 0 0 0 2px var(--paper); }
+  button:focus-visible, input:focus-visible { outline:3px solid #fff; outline-offset:2px; }
+  input[type=range] { flex:1; min-width:0; height:36px; accent-color:var(--amber); }
+  #legend { display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:10px; font-size:13px; }
+  #legend span::before { content:""; display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:5px; vertical-align:-1px; background:var(--c); }
+  #legend .cetak { --c:transparent; padding:0; min-width:0; background:none; color:var(--amber); font-size:13px; text-decoration:underline; }
+  #legend .cetak::before { display:none; }
+  #diag { display:none; margin-top:10px; padding:10px; border-radius:10px; background:rgba(0,0,0,.35); font-size:13px; line-height:1.5; text-align:left; max-height:45vh; overflow:auto; }
+  #diag.buka { display:block; }
+  #diag .ok { color:#7ee08f; } #diag .gagal { color:#ff8a80; } #diag .tunggu { color:#ffd166; }
+  #legend .mode { --c:transparent; padding:0; min-width:0; background:none; color:var(--amber); font-size:13px; text-decoration:underline; }
+  #legend .mode::before { display:none; }
+  #hint button { min-width:0; margin-top:8px; padding:8px 14px; font-size:14px; }
+  #modal { position:fixed; inset:0; z-index:40; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(10,16,28,.8); }
+  #modal.buka { display:flex; }
+  #kotak { width:100%; max-width:380px; max-height:100%; overflow:auto; padding:16px; border-radius:16px; background:var(--paper); color:var(--ink); }
+  #kotak h2 { margin:0 0 10px; font-size:18px; }
+  #kotak img { display:block; width:60%; max-width:240px; margin:0 auto 12px; border:1px solid #ccc; image-rendering:auto; }
+  #kotak label { display:block; font-size:14px; margin-bottom:6px; }
+  #kotak select { width:100%; padding:10px; font:inherit; border-radius:10px; border:2px solid var(--ink); background:#fff; color:var(--ink); }
+  #kotak p { font-size:13px; line-height:1.45; margin:10px 0 14px; }
+  #kotak .row button.alt { color:var(--ink); box-shadow:inset 0 0 0 2px var(--ink); }
+  #areaCetak { display:none; }
+  @media print {
+    @page { margin:10mm; }
+    body > *:not(#areaCetak) { display:none !important; }
+    html, body { height:auto; overflow:visible; background:#fff; }
+    #areaCetak { display:flex; flex-direction:column; align-items:center; font-family:"Trebuchet MS","Segoe UI",sans-serif; color:#000; }
+    #areaCetak img { display:block; width:var(--ukuran, 10cm); height:var(--ukuran, 10cm); image-rendering:auto; }
+    #areaCetak p { margin-top:8mm; font-size:11pt; }
+  }
+</style>
+</head>
+<body>
+
+<div id="hint">Izinkan akses kamera, lalu arahkan ke <b>marker Hiro</b>.
+  Belum punya marker?<br><button type="button" id="btnMarkerAtas">Cetak marker Hiro</button>
+  <button type="button" id="btnDiag" class="alt">Diagnosa</button>
+  <button type="button" id="btnMode" class="alt">Mode tanpa marker</button>
+  <div id="diag" aria-live="polite"></div></div>
+
+<a-scene vr-mode-ui="enabled: false" renderer="logarithmicDepthBuffer: true; precision: medium;"
+         arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;">
+  <a-marker preset="hiro" id="marker" smooth="true" smoothCount="8">
+    <a-entity id="kubus" kubus-urai></a-entity>
+  </a-marker>
+  <a-entity camera><a-entity id="kubus2" kubus-urai visible="false" position="0 0 -3.5" scale="1.6 1.6 1.6"></a-entity></a-entity>
+</a-scene>
+
+<div id="panel">
+  <div id="info"></div>
+  <div class="row">
+    <button id="btnUrai">Urai</button>
+    <input id="slider" type="range" min="0" max="100" value="0" aria-label="Tingkat terurai">
+    <button id="btnLipat" class="alt">Lipat</button>
+  </div>
+  <div id="legend">
+    <span style="--c:#2a6fdb">Alas</span><span style="--c:#e0a100">Atas</span><span style="--c:#d6402f">Depan</span>
+    <span style="--c:#e2761b">Belakang</span><span style="--c:#2f9e5b">Kiri</span><span style="--c:#8a4fd0">Kanan</span>
+    <button type="button" class="mode" id="btnModeBawah">Mode tanpa marker</button>
+    <button type="button" class="cetak" id="btnMarkerBawah">Cetak marker</button>
+  </div>
+</div>
+
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="judulModal">
+  <div id="kotak">
+    <h2 id="judulModal">Marker Hiro</h2>
+    <img id="pratinjau" src="data:image/png;base64,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" alt="Marker Hiro: bingkai hitam tebal, kotak putih di tengah dengan tulisan Hiro di bagian bawah">
+    <label for="ukuran">Ukuran cetak (sisi marker)</label>
+    <select id="ukuran">
+      <option value="8cm">8 cm (kecil)</option>
+      <option value="10cm" selected>10 cm (disarankan)</option>
+      <option value="12cm">12 cm</option>
+      <option value="15cm">15 cm (jarak jauh)</option>
+    </select>
+    <p>Cetak di kertas HVS putih dengan skala 100% (jangan "muat ke halaman"). Tempel di permukaan rata. Hindari kertas mengilap agar tidak memantulkan cahaya.</p>
+    <div class="row">
+      <button type="button" id="btnCetak">Cetak</button>
+      <button type="button" id="btnTutup" class="alt">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<div id="areaCetak" aria-hidden="true">
+  <img id="gambarCetak" src="data:image/png;base64,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" alt="">
+  <p>Marker Hiro untuk AR Kubus. Arahkan kamera ke marker ini.</p>
+</div>
+
+<script>
+// Komponen A-Frame: kubus dari 6 persegi yang dihubungkan engsel, sudut lipat diatur oleh progres t (0 = kubus, 1 = jaring-jaring datar)
+AFRAME.registerComponent('kubus-urai', {
+  init: function () {
+    var THREE = AFRAME.THREE;
+
+    function tekstur(teks, warna) {
+      var c = document.createElement('canvas'); c.width = c.height = 256;
+      var g = c.getContext('2d');
+      g.fillStyle = warna; g.fillRect(0, 0, 256, 256);
+      g.strokeStyle = 'rgba(255,255,255,.95)'; g.lineWidth = 12; g.strokeRect(6, 6, 244, 244);
+      g.fillStyle = '#fff'; g.font = 'bold 46px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(teks, 128, 128);
+      return new THREE.CanvasTexture(c);
+    }
+
+    // Satu sisi = dua bidang (atas dan bawah) agar tulisan tidak terbalik dilihat dari luar maupun dalam
+    function sisi(teks, warna, ox, oz) {
+      var grup = new THREE.Group();
+      var tex = tekstur(teks, warna);
+      var mat = new THREE.MeshBasicMaterial({ map: tex });
+      var a = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98), mat);
+      a.rotation.x = -Math.PI / 2; a.position.y = 0.003;
+      var b = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98), mat);
+      b.rotation.x = Math.PI / 2; b.position.y = -0.003;
+      grup.add(a); grup.add(b);
+      grup.position.set(ox, 0, oz);
+      return grup;
+    }
+
+    function engsel(x, z) { var g = new THREE.Group(); g.position.set(x, 0, z); return g; }
+
+    var akar = new THREE.Group();
+    akar.scale.set(0.42, 0.42, 0.42);
+    akar.position.set(0, 0, 0.2);
+
+    akar.add(sisi('Alas', '#2a6fdb', 0, 0));
+
+    var hDepan = engsel(0, 0.5);   hDepan.add(sisi('Depan', '#d6402f', 0, 0.5));
+    var hBelakang = engsel(0, -0.5); hBelakang.add(sisi('Belakang', '#e2761b', 0, -0.5));
+    var hKanan = engsel(0.5, 0);   hKanan.add(sisi('Kanan', '#8a4fd0', 0.5, 0));
+    var hKiri = engsel(-0.5, 0);   hKiri.add(sisi('Kiri', '#2f9e5b', -0.5, 0));
+    var hAtas = engsel(0, -1);     hAtas.add(sisi('Atas', '#e0a100', 0, -0.5));
+    hBelakang.add(hAtas);          // sisi atas menempel pada sisi belakang
+
+    akar.add(hDepan, hBelakang, hKanan, hKiri);
+    this.el.setObject3D('mesh', akar);
+
+    var self = this;
+    this.t = 0;
+    this.atur = function (t) {
+      self.t = t;
+      var a = (1 - t) * Math.PI / 2;
+      hDepan.rotation.x = -a;
+      hBelakang.rotation.x = a;
+      hKanan.rotation.z = a;
+      hKiri.rotation.z = -a;
+      hAtas.rotation.x = a;
+    };
+    this.atur(0);
+  }
+});
+
+(function () {
+  var slider = document.getElementById('slider');
+  var info = document.getElementById('info');
+  var hint = document.getElementById('hint');
+  var anim = null, dapat = false, modeBebas = false;
+
+  // ---- Diagnosa ----
+  var diag = document.getElementById('diag'), baris = {};
+  var NAMA = { aman: 'Halaman HTTPS', api: 'API kamera browser', izin: 'Izin kamera', browser: 'Browser', kamera: 'Aliran kamera', video: 'Video kamera', patt: 'File pola Hiro', para: 'File kalibrasi kamera', marker: 'Marker' };
+  function catat(k, st, teks) {
+    if (!baris[k]) { baris[k] = document.createElement('div'); diag.appendChild(baris[k]); }
+    baris[k].innerHTML = NAMA[k] + ': <span class="' + st + '">' + teks + '</span>';
+  }
+  document.getElementById('btnDiag').onclick = function () { diag.classList.toggle('buka'); };
+
+  catat('aman', window.isSecureContext ? 'ok' : 'gagal', window.isSecureContext ? 'ya' : 'TIDAK (kamera akan diblokir)');
+  var adaApi = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  catat('api', adaApi ? 'ok' : 'gagal', adaApi ? 'tersedia' : 'TIDAK tersedia');
+  var ua = navigator.userAgent, dalamApp = /FBAN|FBAV|Instagram|Line\/|MicroMessenger|; wv\)|TikTok|GSA\//i.test(ua);
+  var nm = /SamsungBrowser/i.test(ua) ? 'Samsung Internet' : /Chrome\//.test(ua) ? 'Chrome' : 'lainnya';
+  catat('browser', dalamApp ? 'gagal' : 'ok', nm + (dalamApp ? ' (di dalam aplikasi lain: buka langsung di Chrome)' : ''));
+  catat('izin', 'tunggu', 'belum diketahui');
+  try { navigator.permissions.query({ name: 'camera' }).then(function (p) {
+    function u() { catat('izin', p.state === 'granted' ? 'ok' : p.state === 'denied' ? 'gagal' : 'tunggu', p.state === 'granted' ? 'diizinkan' : p.state === 'denied' ? 'DITOLAK (ubah di pengaturan situs)' : 'belum ditanya'); }
+    u(); p.onchange = u; }).catch(function () {}); } catch (e) {}
+  catat('kamera', 'tunggu', 'menunggu...');
+  window.addEventListener('camera-init', function () { catat('kamera', 'ok', 'berhasil dibuka'); });
+  window.addEventListener('camera-error', function (e) { catat('kamera', 'gagal', 'GAGAL ' + ((e && e.error && (e.error.name || e.error.message)) || '(lihat pesan error di layar)')); });
+  catat('video', 'tunggu', 'menunggu...');
+  setInterval(function () {
+    var v = document.querySelector('video');
+    if (v && v.videoWidth) catat('video', v.paused ? 'tunggu' : 'ok', v.videoWidth + 'x' + v.videoHeight + (v.paused ? ' (berhenti)' : ' (berjalan)'));
+    else catat('video', 'gagal', 'belum ada gambar dari kamera');
+  }, 1000);
+  [['patt', 'https://ar-js-org.github.io/AR.js/data/data/patt.hiro'], ['para', 'https://ar-js-org.github.io/AR.js/data/data/camera_para.dat']].forEach(function (d) {
+    catat(d[0], 'tunggu', 'memeriksa...');
+    fetch(d[1], { mode: 'no-cors', cache: 'no-store' }).then(function () { catat(d[0], 'ok', 'bisa diakses'); })
+      .catch(function () { catat(d[0], 'gagal', 'TIDAK bisa diunduh (jaringan memblokir?)'); });
+  });
+  catat('marker', 'tunggu', 'belum terlihat');
+
+  // ---- Mode tanpa marker: kubus melayang di depan kamera, geser jari untuk memutar ----
+  function setMode() {
+    modeBebas = !modeBebas;
+    var k2 = document.getElementById('kubus2');
+    k2.setAttribute('visible', modeBebas);
+    if (modeBebas) { k2.object3D.rotation.set(-0.9, 0.5, 0); hint.classList.add('hidden'); }
+    else if (!dapat) hint.classList.remove('hidden');
+    var t = modeBebas ? 'Mode marker' : 'Mode tanpa marker';
+    document.getElementById('btnMode').textContent = t; document.getElementById('btnModeBawah').textContent = t;
+  }
+  document.getElementById('btnMode').onclick = setMode;
+  document.getElementById('btnModeBawah').onclick = setMode;
+  var seret = null;
+  document.addEventListener('pointerdown', function (e) { if (modeBebas && !e.target.closest('#panel,#hint,#modal')) seret = { x: e.clientX, y: e.clientY }; });
+  document.addEventListener('pointermove', function (e) {
+    if (!seret) return;
+    var r = document.getElementById('kubus2').object3D.rotation;
+    r.y += (e.clientX - seret.x) * 0.01; r.x += (e.clientY - seret.y) * 0.01;
+    seret = { x: e.clientX, y: e.clientY };
+  });
+  document.addEventListener('pointerup', function () { seret = null; });
+
+  function semua() { return [].slice.call(document.querySelectorAll('[kubus-urai]')).map(function (e) { return e.components['kubus-urai']; }).filter(Boolean); }
+
+  function teks(t) {
+    if (t < 0.03) return '<b>Kubus utuh.</b> Punya 6 sisi, 12 rusuk, dan 8 titik sudut. Geser pengatur atau tekan <b>Urai</b>.';
+    if (t > 0.97) return '<b>Jaring-jaring kubus:</b> 6 persegi sama besar. Sisi yang berhadapan (Alas–Atas, Depan–Belakang, Kiri–Kanan) tidak pernah bersebelahan dalam deretan.';
+    return 'Sisi-sisi sedang terbuka. Putar HP dan lihat dari berbagai sudut.';
+  }
+
+  function tampil(t) {
+    semua().forEach(function (k) { k.atur(t); });
+    slider.value = Math.round(t * 100);
+    info.innerHTML = teks(t);
+  }
+
+  function ke(target) {
+    if (anim) cancelAnimationFrame(anim);
+    var awal = parseFloat(slider.value) / 100, mulai = performance.now(), dur = 1400 * Math.abs(target - awal) + 200;
+    (function langkah(now) {
+      var p = Math.min(1, (now - mulai) / dur);
+      var e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      tampil(awal + (target - awal) * e);
+      if (p < 1) anim = requestAnimationFrame(langkah);
+    })(mulai);
+  }
+
+  document.getElementById('btnUrai').onclick = function () { ke(1); };
+  document.getElementById('btnLipat').onclick = function () { ke(0); };
+  slider.oninput = function () { if (anim) cancelAnimationFrame(anim); tampil(slider.value / 100); };
+
+  var modal = document.getElementById('modal');
+  function bukaModal() { modal.classList.add('buka'); document.getElementById('btnCetak').focus(); }
+  function tutupModal() { modal.classList.remove('buka'); }
+  document.getElementById('btnMarkerAtas').onclick = bukaModal;
+  document.getElementById('btnMarkerBawah').onclick = bukaModal;
+  document.getElementById('btnTutup').onclick = tutupModal;
+  modal.onclick = function (e) { if (e.target === modal) tutupModal(); };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') tutupModal(); });
+  document.getElementById('btnCetak').onclick = function () {
+    document.getElementById('areaCetak').style.setProperty('--ukuran', document.getElementById('ukuran').value);
+    tutupModal();
+    setTimeout(function () { window.print(); }, 150);
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var m = document.getElementById('marker');
+    m.addEventListener('markerFound', function () { dapat = true; hint.classList.add('hidden'); catat('marker', 'ok', 'TERDETEKSI'); });
+    m.addEventListener('markerLost', function () { dapat = false; if (!modeBebas) hint.classList.remove('hidden'); catat('marker', 'tunggu', 'hilang dari pandangan'); });
+    document.querySelector('a-scene').addEventListener('loaded', function () { tampil(0); });
+  });
+})();
+</script>
+</body>
+</html>
